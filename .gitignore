@@ -32,6 +32,8 @@ venv/
 ENV/
 env/
 .venv
+AII/
+faidm/
 
 # IDE
 .vscode/

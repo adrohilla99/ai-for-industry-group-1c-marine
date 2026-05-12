@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fleet Monitoring Dashboard · GT Predictive Maintenance</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<!-- ══ Titlebar ═══════════════════════════════════════════════════════ -->
+<header id="titlebar">
+  <span class="tb-logo">FLEETMON</span>
+  <span style="color:var(--border-accent)">|</span>
+  <span class="tb-title">Gas Turbine Predictive Maintenance System · VESSEL ID: DDG-114</span>
+  <span class="tb-sep"></span>
+  <span class="tb-clock" id="tb-clock">----</span>
+  <div class="tb-indicator"></div>
+</header>
+
+<!-- ══ Main 2-column layout ══════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ══ LEFT COLUMN: CONTROLS ══════════════════════════════════════ -->
+  <div id="col-left">
+
+    <!-- Master Lever Block -->
+    <div class="panel" id="master-block">
+      <div class="panel-header">
+        <span class="panel-tag">CTL-01</span>
+        <span class="panel-title">MASTER CONTROL · LEVER POSITION</span>
+      </div>
+      <div class="master-slider-wrap" id="master-slider-wrap">
+        <div class="master-label-row">
+          <span class="master-label">⬡ PRIMARY DRIVE LEVER</span>
+          <span class="master-value" id="master-value">5.2</span>
+        </div>
+        <!-- slider injected by JS -->
+      </div>
+    </div>
+
+    <!-- Sensor Sliders Block -->
+    <div class="panel" id="sensors-block">
+      <div class="panel-header">
+        <span class="panel-tag">SEN-02</span>
+        <span class="panel-title">LIVE SENSOR TELEMETRY</span>
+      </div>
+      <div class="panel-body" id="sensor-list">
+        <!-- sensor rows injected by JS -->
+      </div>
+    </div>
+
+  </div><!-- /col-left -->
+
+  <!-- ══ RIGHT COLUMN ════════════════════════════════════════════════ -->
+  <div id="col-right">
+
+    <!-- ── Telemetry / Status Panel ── -->
+    <div class="panel" id="telemetry-panel">
+      <div class="panel-header panel-header-alt">
+        <span class="panel-tag">OUT-01</span>
+        <span class="panel-title">AI DIAGNOSTIC OUTPUT · SYSTEM STATUS</span>
+      </div>
+
+      <div class="status-body">
+
+        <!-- Cell 1: System Status -->
+        <div class="status-cell">
+          <div class="status-cell-label">▶ SYSTEM STATUS</div>
+          <div id="status-text" class="healthy">INITIALISING</div>
+          <div style="margin-top:8px;">
+            <div class="led-strip">
+              <!-- 16 LEDs representing failure probability -->
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+              <div class="led"></div><div class="led"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cell 2: Failure Probability -->
+        <div class="status-cell">
+          <div class="status-cell-label">▶ FAILURE PROBABILITY</div>
+          <div>
+            <span id="prob-value" class="metric-num">–</span>
+            <span class="prob-suffix"> %</span>
+          </div>
+          <div id="prob-bar-wrap" style="margin-top:10px;">
+            <div id="prob-bar"></div>
+          </div>
+          <div class="metric-sub" style="margin-top:4px;">THRESHOLD: 50.0%</div>
+        </div>
+
+        <!-- Cell 3: Model Info -->
+        <div class="status-cell">
+          <div class="status-cell-label">▶ MODEL REGISTRY</div>
+          <div class="metric-num" style="font-size:13px; color:var(--cyan);">RF-MAINT-v1</div>
+          <div class="metric-sub">Random Forest Classifier</div>
+          <div class="metric-sub" style="margin-top:6px;">N_ESTIMATORS: 50</div>
+          <div class="metric-sub">MAX_DEPTH: 8</div>
+          <div class="metric-sub">FEATURES: 16</div>
+        </div>
+
+      </div><!-- /status-body -->
+    </div><!-- /telemetry-panel -->
+
+    <!-- ── SHAP Explainability Panel ── -->
+    <div class="panel" id="shap-panel">
+      <div class="panel-header panel-header-alt">
+        <span class="panel-tag">XAI-01</span>
+        <span class="panel-title">SHAP WATERFALL · FEATURE ATTRIBUTION ANALYSIS</span>
+      </div>
+
+      <div class="shap-body">
+        <!-- Spinner shown while loading -->
+        <div id="shap-spinner" style="flex-direction:column; align-items:center; gap:12px;">
+          <div class="spinner-ring"></div>
+          <span class="spinner-label">COMPUTING SHAP VALUES…</span>
+        </div>
+
+        <!-- Placeholder before first result -->
+        <div id="shap-placeholder">
+          <div class="shap-placeholder-icon">◈</div>
+          <div class="shap-placeholder-text">Awaiting telemetry input</div>
+        </div>
+
+        <!-- SHAP image -->
+        <img id="shap-img" alt="SHAP Waterfall Plot" />
+      </div>
+    </div><!-- /shap-panel -->
+
+  </div><!-- /col-right -->
+
+</div><!-- /app -->
+
+<!-- ══ Status Bar ════════════════════════════════════════════════════ -->
+<footer id="statusbar">
+  <span class="sb-item"><span class="sb-key">VESSEL</span><span class="sb-val">DDG-114 · ARLEIGH BURKE CLASS</span></span>
+  <span class="sb-item"><span class="sb-key">ENGINE</span><span class="sb-val">GE LM2500 GAS TURBINE × 4</span></span>
+  <span class="sb-item"><span class="sb-key">STATUS</span><span class="sb-val" id="sb-status-val" style="color:var(--green)">NOMINAL</span></span>
+  <span class="sb-sep"></span>
+  <span class="sb-item"><span class="sb-key">LATENCY</span><span id="sb-latency" class="sb-val">—</span></span>
+  <span class="sb-item"><span class="sb-key">MODEL</span><span class="sb-val">RF-MAINT-v1</span></span>
+  <span class="sb-item"><span class="sb-key">XAI</span><span class="sb-val">SHAP-TREE</span></span>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

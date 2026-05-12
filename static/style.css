@@ -1,0 +1,546 @@
+/* ═══════════════════════════════════════════════════════════════════
+   FLEET MONITORING DASHBOARD  ·  MATLAB/Simulink Industrial Aesthetic
+   ═══════════════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+/* ── Reset & Tokens ─────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-root:        #1a1a1a;
+  --bg-panel:       #222222;
+  --bg-panel-inner: #1e1e1e;
+  --bg-header:      #2c2c2c;
+  --bg-header-alt:  #303030;
+  --border:         #444444;
+  --border-light:   #3a3a3a;
+  --border-accent:  #555555;
+
+  --text-primary:   #e0e0e0;
+  --text-secondary: #a8a8a8;
+  --text-dim:       #707070;
+  --text-label:     #b0b0b0;
+
+  --green:          #00c853;
+  --green-dim:      #1b5e20;
+  --green-glow:     rgba(0, 200, 83, 0.25);
+  --red:            #ff1744;
+  --red-dim:        #b71c1c;
+  --red-glow:       rgba(255, 23, 68, 0.25);
+  --amber:          #ffab00;
+  --amber-dim:      #ff6f00;
+  --blue-accent:    #0288d1;
+  --cyan:           #00bcd4;
+
+  --font-mono:      'Roboto Mono', 'Share Tech Mono', 'Courier New', monospace;
+
+  --panel-radius:   2px;
+  --header-h:       28px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg-root);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+/* ── Scanline overlay (subtle CRT texture) ──────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.04) 2px,
+    rgba(0,0,0,0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Top Titlebar ───────────────────────────────────────────────── */
+#titlebar {
+  height: 36px;
+  background: #252525;
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.tb-logo {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.tb-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.tb-sep { flex: 1; }
+
+.tb-clock {
+  font-size: 11px;
+  color: var(--cyan);
+  letter-spacing: 1px;
+}
+
+.tb-indicator {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: blink 1.6s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Main Grid ──────────────────────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  grid-template-rows: 1fr;
+  height: calc(100vh - 36px);
+  gap: 0;
+}
+
+/* ── Panel primitives ───────────────────────────────────────────── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  height: var(--header-h);
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-accent);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.panel-header-alt {
+  background: var(--bg-header-alt);
+}
+
+.panel-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  border: 1px solid var(--border-accent);
+  padding: 1px 5px;
+}
+
+.panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-label);
+  text-transform: uppercase;
+}
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+/* Thin scrollbar */
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border-accent); }
+
+/* ── Left Column: Controls ──────────────────────────────────────── */
+#col-left {
+  border-right: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── RIGHT Column ───────────────────────────────────────────────── */
+#col-right {
+  display: grid;
+  grid-template-rows: 220px 1fr;
+}
+
+/* ── Master Lever Block ─────────────────────────────────────────── */
+#master-block {
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
+.master-slider-wrap {
+  padding: 12px 14px;
+  background: #202020;
+}
+
+.master-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.master-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.master-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 1px;
+  text-shadow: 0 0 12px rgba(0, 188, 212, 0.5);
+  min-width: 60px;
+  text-align: right;
+}
+
+input[type=range]#master-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 12px;
+  background: linear-gradient(to right, var(--cyan) var(--pct, 0%), #333 var(--pct, 0%));
+  border: 1px solid #3a3a3a;
+  border-radius: 0;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type=range]#master-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  background: var(--cyan);
+  border: 2px solid #1a1a1a;
+  border-radius: 0;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(0,188,212,0.6);
+}
+
+/* ── Sensor Sliders ─────────────────────────────────────────────── */
+#sensors-block {
+  flex: 1;
+}
+
+.sensor-row {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-light);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 3px 6px;
+}
+
+.sensor-row:last-child { border-bottom: none; }
+
+.sensor-name {
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.sensor-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  min-width: 80px;
+}
+
+.sensor-unit {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+
+input[type=range].sensor-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(to right, #555 var(--pct, 0%), #2a2a2a var(--pct, 0%));
+  border: 1px solid #333;
+  border-radius: 0;
+  outline: none;
+  cursor: pointer;
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+input[type=range].sensor-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 16px;
+  background: #888;
+  border: 1px solid #555;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+input[type=range].sensor-slider:hover {
+  background: linear-gradient(to right, var(--amber) var(--pct, 0%), #2a2a2a var(--pct, 0%));
+}
+
+input[type=range].sensor-slider:hover::-webkit-slider-thumb {
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(255, 171, 0, 0.5);
+}
+
+/* ── Decay Sliders (critical, shown red when low) ───────────────── */
+input[type=range].decay-slider {
+  background: linear-gradient(to right, var(--green) var(--pct, 100%), #2a2a2a var(--pct, 100%));
+}
+
+input[type=range].decay-slider::-webkit-slider-thumb {
+  background: var(--green);
+}
+
+/* ── Status Panel (top-right) ───────────────────────────────────── */
+#telemetry-panel {
+  border-bottom: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.status-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+  align-items: stretch;
+}
+
+.status-cell {
+  padding: 10px 14px;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.status-cell:last-child { border-right: none; }
+
+.status-cell-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+/* Big status indicator */
+#status-text {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+
+#status-text.healthy {
+  color: var(--green);
+  text-shadow: 0 0 12px var(--green-glow);
+}
+
+#status-text.warning {
+  color: var(--red);
+  text-shadow: 0 0 12px var(--red-glow);
+  animation: alarm-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes alarm-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* Probability gauge */
+#prob-bar-wrap {
+  margin-top: 6px;
+  height: 8px;
+  background: #111;
+  border: 1px solid #333;
+  position: relative;
+}
+
+#prob-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  transition: width 0.4s ease, background 0.4s ease;
+}
+
+#prob-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.prob-suffix {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* Metric card */
+.metric-num {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.metric-sub {
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-top: 2px;
+}
+
+/* LED strip */
+.led-strip {
+  display: flex;
+  gap: 3px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.led {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #333;
+  border: 1px solid #444;
+}
+
+.led.on-green { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.led.on-amber  { background: var(--amber); box-shadow: 0 0 4px var(--amber); }
+.led.on-red    { background: var(--red);   box-shadow: 0 0 4px var(--red);   }
+
+/* ── SHAP / Explainability Panel ────────────────────────────────── */
+#shap-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.shap-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: #1a1a1a;
+  overflow: hidden;
+}
+
+#shap-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: none;
+  border: 1px solid var(--border-light);
+}
+
+#shap-placeholder {
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.shap-placeholder-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  opacity: 0.4;
+}
+
+.shap-placeholder-text {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+/* Spinner */
+#shap-spinner {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.spinner-ring {
+  width: 32px; height: 32px;
+  border: 3px solid #333;
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+/* ── Bottom status bar ──────────────────────────────────────────── */
+#statusbar {
+  height: 22px;
+  background: #1e1e1e;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 16px;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  grid-column: 1 / -1;
+  flex-shrink: 0;
+}
+
+.sb-item { display: flex; gap: 4px; align-items: center; }
+.sb-key  { color: var(--text-dim); text-transform: uppercase; }
+.sb-val  { color: var(--text-secondary); }
+.sb-sep  { flex: 1; }
+#sb-latency { color: var(--cyan); }
+
+/* ── Inset grid lines (Simulink decorative) ─────────────────────── */
+.grid-corner {
+  position: absolute;
+  width: 10px; height: 10px;
+  border-color: var(--border-accent);
+  border-style: solid;
+  border-width: 0;
+}
+
+.grid-corner.tl { top: 0; left: 0;  border-top-width: 1px; border-left-width: 1px; }
+.grid-corner.tr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+.grid-corner.bl { bottom: 0; left: 0;  border-bottom-width: 1px; border-left-width: 1px; }
+.grid-corner.br { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
