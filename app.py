@@ -1,12 +1,21 @@
+"""
+Digital Twin Predictive Maintenance Dashboard — Flask Backend
+Dual-ML Architecture:
+  TWIN_MODEL       : MultiOutputRegressor  —  Lever_Position (1) → 13 telemetry outputs
+  CLASSIFIER_MODEL : RandomForestRegressor —  Lever + 13 telemetry (14) → Engine Decay Coefficient
+"""
+
 import io
 import base64
-import pickle
 import warnings
+
+import joblib
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 import shap
 from flask import Flask, request, jsonify, render_template
 
@@ -14,156 +23,134 @@ warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 
-# ── Load model on startup ──────────────────────────────────────────────────────
-with open('random_forest_model.pkl', 'rb') as f:
-    bundle = pickle.load(f)
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  FEATURE SCHEMA
+# ══════════════════════════════════════════════════════════════════════════════
 
-def _is_feature_list(value):
-    if not isinstance(value, (list, tuple, np.ndarray, pd.Index)):
-        return False
-    return all(isinstance(item, str) for item in value)
-
-
-if isinstance(bundle, dict):
-    MODEL = bundle.get('model') or bundle.get('estimator')
-    FEATURE_COLS = bundle.get('feature_cols') or bundle.get('feature_columns')
-elif isinstance(bundle, (list, tuple)) and len(bundle) >= 2:
-    if _is_feature_list(bundle[0]):
-        FEATURE_COLS = list(bundle[0])
-        MODEL = bundle[1]
-    elif _is_feature_list(bundle[1]):
-        FEATURE_COLS = list(bundle[1])
-        MODEL = bundle[0]
-    else:
-        MODEL = bundle[0]
-        FEATURE_COLS = bundle[1]
-else:
-    MODEL = bundle
-    FEATURE_COLS = None
-
-if not _is_feature_list(FEATURE_COLS):
-    FEATURE_COLS = None
-
-# Pre-build SHAP explainer once (expensive)
-EXPLAINER = shap.TreeExplainer(MODEL)
-
-# Friendly short labels for the SHAP plot
-FEATURE_LABELS = {
-    'Lever position':                                          'Lever Position',
-    'Ship speed (v)':                                         'Ship Speed [kn]',
-    'Gas Turbine (GT) shaft torque (GTT) [kN m]':             'GT Shaft Torque [kN·m]',
-    'GT rate of revolutions (GTn) [rpm]':                     'GT Rate of Rev [rpm]',
-    'Gas Generator rate of revolutions (GGn) [rpm]':          'GG Rate of Rev [rpm]',
-    'Starboard Propeller Torque (Ts) [kN]':                   'Stbd Prop Torque [kN]',
-    'Port Propeller Torque (Tp) [kN]':                        'Port Prop Torque [kN]',
-    'High Pressure (HP) Turbine exit temperature (T48) [C]': 'HP Turbine Exit Temp [°C]',
-    'GT Compressor outlet air temperature (T2) [C]':          'Compressor Out Temp [°C]',
-    'HP Turbine exit pressure (P48) [bar]':                   'HP Turbine Exit Press [bar]',
-    'GT Compressor outlet air pressure (P2) [bar]':           'Compressor Out Press [bar]',
-    'GT exhaust gas pressure (Pexh) [bar]':                   'Exhaust Gas Press [bar]',
-    'Turbine Injecton Control (TIC) [%]':                     'Turbine Inject Ctrl [%]',
-    'Fuel flow (mf) [kg/s]':                                  'Fuel Flow [kg/s]',
-    'GT Compressor decay state coefficient':                  'Compressor Decay Coeff',
-    'GT Turbine decay state coefficient':                     'Turbine Decay Coeff',
-}
-
-# ── Default/nominal sensor values ─────────────────────────────────────────────
-DEFAULTS = {
-    'Lever position':                                          5.2,
-    'Ship speed (v)':                                         15,
-    'Gas Turbine (GT) shaft torque (GTT) [kN m]':             27000,
-    'GT rate of revolutions (GTn) [rpm]':                     2136,
-    'Gas Generator rate of revolutions (GGn) [rpm]':          8200,
-    'Starboard Propeller Torque (Ts) [kN]':                   227,
-    'Port Propeller Torque (Tp) [kN]':                        227,
-    'High Pressure (HP) Turbine exit temperature (T48) [C]': 735,
-    'GT Compressor outlet air temperature (T2) [C]':          646,
-    'HP Turbine exit pressure (P48) [bar]':                   2.35,
-    'GT Compressor outlet air pressure (P2) [bar]':           12.3,
-    'GT exhaust gas pressure (Pexh) [bar]':                   1.03,
-    'Turbine Injecton Control (TIC) [%]':                     33.6,
-    'Fuel flow (mf) [kg/s]':                                  0.66,
-    'GT Compressor decay state coefficient':                  0.975,
-    'GT Turbine decay state coefficient':                     0.9875,
-}
-
-if FEATURE_COLS is None:
-    FEATURE_COLS = [
-    'Lever position',
-    'Ship speed (v)',
-    'Gas Turbine (GT) shaft torque (GTT) [kN m]',
-    'GT rate of revolutions (GTn) [rpm]',
-    'Gas Generator rate of revolutions (GGn) [rpm]',
-    'Starboard Propeller Torque (Ts) [kN]',
-    'Port Propeller Torque (Tp) [kN]',
-    'High Pressure (HP) Turbine exit temperature (T48) [C]',
-    'GT Compressor outlet air temperature (T2) [C]',
-    'HP Turbine exit pressure (P48) [bar]',
-    'GT Compressor outlet air pressure (P2) [bar]',
-    'GT exhaust gas pressure (Pexh) [bar]',
-    'Turbine Injecton Control (TIC) [%]',
-    'Fuel flow (mf) [kg/s]',
-    'GT Compressor decay state coefficient',
-    'GT Turbine decay state coefficient',
+TELEMETRY_KEYS = [
+    'Ship_Speed',
+    'GT_Shaft_Torque',
+    'GT_Rate_of_Rev',
+    'GG_Rate_of_Rev',
+    'Stbd_Prop_Torque',
+    'Port_Prop_Torque',
+    'HP_Turbine_Exit_Temp',
+    'Compressor_Out_Temp',
+    'HP_Turbine_Exit_Press',
+    'Compressor_Out_Press',
+    'Exhaust_Gas_Press',
+    'Turbine_Inject_Ctrl',
+    'Fuel_Flow',
 ]
 
+CLASSIFIER_COLS = ['Lever_Position'] + TELEMETRY_KEYS
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+FEATURE_LABELS = {
+    'Lever_Position':        'Lever Position',
+    'Ship_Speed':            'Ship Speed [kn]',
+    'GT_Shaft_Torque':       'GT Shaft Torque [kN·m]',
+    'GT_Rate_of_Rev':        'GT Rate of Rev [rpm]',
+    'GG_Rate_of_Rev':        'GG Rate of Rev [rpm]',
+    'Stbd_Prop_Torque':      'Stbd Prop Torque [kN]',
+    'Port_Prop_Torque':      'Port Prop Torque [kN]',
+    'HP_Turbine_Exit_Temp':  'HP Turbine Exit Temp [°C]',
+    'Compressor_Out_Temp':   'Compressor Out Temp [°C]',
+    'HP_Turbine_Exit_Press': 'HP Turbine Exit Press [bar]',
+    'Compressor_Out_Press':  'Compressor Out Press [bar]',
+    'Exhaust_Gas_Press':     'Exhaust Gas Press [bar]',
+    'Turbine_Inject_Ctrl':   'Turbine Inject Ctrl [%]',
+    'Fuel_Flow':             'Fuel Flow [kg/s]',
+}
+
+# Decay thresholds: output of CLASSIFIER_MODEL is a decay coefficient ~0.975–0.996.
+# Lower value = more degraded.
+_HEALTHY_DECAY  = 0.990
+_CRITICAL_DECAY = 0.982
 
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    payload = request.get_json(force=True)
-    print("Received payload:", payload)  # Log incoming data
+# ══════════════════════════════════════════════════════════════════════════════
+#  MODEL INITIALIZATION
+# ══════════════════════════════════════════════════════════════════════════════
 
-    # Build feature row from payload (falling back to defaults for hidden sensors)
-    row = {}
-    for col in FEATURE_COLS:
-        row[col] = float(payload.get(col, DEFAULTS[col]))
+try:
+    TWIN_MODEL       = joblib.load('digital_twin_model.pkl')
+    CLASSIFIER_MODEL = joblib.load('diagnosis_model.pkl')
+    EXPLAINER        = shap.TreeExplainer(CLASSIFIER_MODEL)
+    print(f"[startup] Loaded digital_twin_model.pkl : {type(TWIN_MODEL).__name__} "
+          f"(n_features_in_={getattr(TWIN_MODEL, 'n_features_in_', '?')})")
+    print(f"[startup] Loaded diagnosis_model.pkl    : {type(CLASSIFIER_MODEL).__name__} "
+          f"(n_features_in_={getattr(CLASSIFIER_MODEL, 'n_features_in_', '?')})")
+except FileNotFoundError as e:
+    print(f"[startup] ERROR — model file not found: {e}")
+    print("[startup] Ensure digital_twin_model.pkl and diagnosis_model.pkl are in the project root.")
+    raise
 
-    df_row = pd.DataFrame([row], columns=FEATURE_COLS)
-    print("DataFrame row for prediction:\n", df_row) # Log DataFrame
 
-    # ── Prediction ────────────────────────────────────────────────────────────
-    if hasattr(MODEL, 'predict_proba'):
-        proba = MODEL.predict_proba(df_row)[0]
-        failure_prob = float(proba[1])
+# ══════════════════════════════════════════════════════════════════════════════
+#  PIPELINE HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _simulate_telemetry(lever: float) -> dict:
+    """Step A — twin model: lever → 13 healthy sensor values."""
+    predicted = TWIN_MODEL.predict([[lever]])[0]
+    return dict(zip(TELEMETRY_KEYS, predicted.tolist()))
+
+
+def _inject_faults(telemetry: dict, compressor_fault: float, turbine_fault: float) -> dict:
+    """Step B — manipulate the two SHAP-dominant features to simulate degradation."""
+    faulted = telemetry.copy()
+    faulted['Compressor_Out_Temp'] = telemetry['Compressor_Out_Temp'] * (1 + compressor_fault - turbine_fault)
+    faulted['GT_Rate_of_Rev']      = telemetry['GT_Rate_of_Rev']      * (1 - compressor_fault + turbine_fault)
+    return faulted
+
+
+def _diagnose(lever: float, telemetry: dict) -> tuple[str, float]:
+    """Step C — failure probability via decay-curve mapping."""
+    row        = np.array([[lever] + [telemetry[k] for k in TELEMETRY_KEYS]])
+    mean_decay = float(np.mean(np.atleast_1d(CLASSIFIER_MODEL.predict(row)[0])))
+
+    if mean_decay >= _HEALTHY_DECAY:
+        prob = 0.0
+    elif mean_decay <= _CRITICAL_DECAY:
+        prob = 1.0
     else:
-        prediction = MODEL.predict(df_row)
-        prediction_value = np.asarray(prediction).reshape(-1)[0]
-        failure_prob = float(np.clip(prediction_value, 0.0, 1.0))
-    
-    print(f"Predicted failure probability: {failure_prob:.4f}") # Log prediction
-    
-    status = 'MAINTENANCE REQUIRED' if failure_prob >= 0.5 else 'NOMINAL'
+        linear_prob = (_HEALTHY_DECAY - mean_decay) / (_HEALTHY_DECAY - _CRITICAL_DECAY)
+        prob = linear_prob ** 0.5
 
-    # ── SHAP waterfall ────────────────────────────────────────────────────────
-    shap_values = EXPLAINER(df_row)
+    status = 'MAINTENANCE REQUIRED' if prob >= 0.6 else 'HEALTHY'
+    return status, prob
 
-    # Rename features for readability
-    shap_values.feature_names = [FEATURE_LABELS.get(c, c) for c in FEATURE_COLS]
 
-    fig, ax = plt.subplots(figsize=(9, 5.5))
+def _shap_waterfall_b64(lever: float, telemetry: dict) -> str:
+    """Step D — SHAP waterfall for the diagnosis row; returns base64 PNG."""
+    row = pd.DataFrame(
+        [[lever] + [telemetry[k] for k in TELEMETRY_KEYS]],
+        columns=CLASSIFIER_COLS,
+    )
+
+    shap_vals = EXPLAINER(row.values)
+    shap_vals.feature_names = [FEATURE_LABELS[c] for c in CLASSIFIER_COLS]
+
+    # Single-output RFR → 2D Explanation (samples, features); pick sample 0.
+    sv = shap_vals[0]
+
+    # Scale by 100 so the waterfall shows readable numbers (e.g. ±0.4)
+    # instead of the raw decay-coefficient variance (e.g. ±0.004).
+    sv.values      = sv.values      * 100
+    sv.base_values = sv.base_values * 100
+
+    fig = plt.figure(figsize=(9, 5))
     fig.patch.set_facecolor('#1a1a1a')
+    shap.plots.waterfall(sv, show=False, max_display=14)
 
-    # For binary classifiers, shap_values has shape (n_samples, n_features, n_classes)
-    # We want the failure class (index 1) for the first (only) sample
-    sv = shap_values[0, :, 1] if shap_values.values.ndim == 3 else shap_values[0]
-    shap.plots.waterfall(sv, show=False, max_display=12)
-
-    # Style the existing axes to match the dark industrial theme
-    fig_axes = plt.gcf().get_axes()
-    for a in fig_axes:
-        a.set_facecolor('#1a1a1a')
-        a.tick_params(colors='#c8c8c8', labelsize=8)
-        for spine in a.spines.values():
+    for ax in fig.get_axes():
+        ax.set_facecolor('#1a1a1a')
+        ax.tick_params(colors='#cccccc', labelsize=8)
+        for spine in ax.spines.values():
             spine.set_edgecolor('#444444')
-        a.xaxis.label.set_color('#c8c8c8')
-        a.yaxis.label.set_color('#c8c8c8')
-        a.title.set_color('#c8c8c8') if hasattr(a, 'title') else None
+        ax.xaxis.label.set_color('#cccccc')
+        ax.yaxis.label.set_color('#cccccc')
 
     plt.gcf().patch.set_facecolor('#1a1a1a')
     plt.tight_layout(pad=0.8)
@@ -173,13 +160,55 @@ def predict():
                 facecolor='#1a1a1a', edgecolor='none')
     buf.seek(0)
     img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+    plt.clf()
     plt.close('all')
     buf.close()
+    return img_b64
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  ROUTES
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    payload = request.get_json(force=True)
+
+    try:
+        lever = float(np.clip(float(payload['Lever_Position']), 1.1, 9.3))
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'error': 'Missing or invalid Lever_Position'}), 400
+
+    # Faults arrive as raw % (0–20); convert to decimals for the fault equations.
+    try:
+        comp_fault = float(np.clip(float(payload.get('Compressor_Fault', 0)), 0, 20)) / 100
+    except (TypeError, ValueError):
+        comp_fault = 0.0
+
+    try:
+        turb_fault = float(np.clip(float(payload.get('Turbine_Fault', 0)), 0, 20)) / 100
+    except (TypeError, ValueError):
+        turb_fault = 0.0
+
+    # A — Simulate healthy telemetry via digital twin
+    telemetry = _simulate_telemetry(lever)
+    # B — Inject dual-fault degradation onto Compressor_Out_Temp and GT_Rate_of_Rev
+    telemetry = _inject_faults(telemetry, comp_fault, turb_fault)
+    # C — Diagnose via decay regressor
+    status, prob = _diagnose(lever, telemetry)
+    # D — SHAP waterfall explanation
+    img_b64 = _shap_waterfall_b64(lever, telemetry)
 
     return jsonify({
-        'status': status,
-        'probability': round(failure_prob * 100, 2),
-        'shap_image_base64': img_b64,
+        'status':      status,
+        'probability': round(prob * 100, 1),
+        'telemetry':   telemetry,
+        'shap_image':  img_b64,
     })
 
 

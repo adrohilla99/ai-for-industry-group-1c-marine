@@ -1,334 +1,260 @@
-/* ═══════════════════════════════════════════════════════════════
-   Fleet Monitoring Dashboard  ·  script.js
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   Digital Twin Dashboard · script.js
+   Dual-ML architecture: lever + dual fault → /predict → twin simulation → AI diagnosis
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 (function () {
   'use strict';
 
-  // ── Debounce helper ──────────────────────────────────────────
-  function debounce(fn, delay) {
-    let timer;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), delay);
-    };
-  }
-
-  // ── Clock ────────────────────────────────────────────────────
-  function updateClock() {
-    const el = document.getElementById('tb-clock');
-    if (!el) return;
-    const now = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    el.textContent =
-      `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}` +
-      ` ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())} UTC`;
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
-
-  // ── Slider fill helper ───────────────────────────────────────
-  function updateSliderFill(input) {
-    const min = parseFloat(input.min);
-    const max = parseFloat(input.max);
-    const val = parseFloat(input.value);
-    const pct = ((val - min) / (max - min)) * 100;
-    input.style.setProperty('--pct', pct.toFixed(1) + '%');
-  }
-
-  // ── Sensor config  ─────────────────────────────────────────
-  // Each entry: { key, label, unit, min, max, step, default, id }
-  const SENSORS = [
-    {
-      id:      'master',
-      key:     'Lever position',
-      label:   'LEVER POSITION',
-      unit:    '',
-      min:     1.0, max: 9.5, step: 0.1, def: 5.2,
-      isMaster: true,
-    },
-    {
-      id:      'ship_speed',
-      key:     'Ship speed (v)',
-      label:   'SHIP SPEED',
-      unit:    'kn',
-      min:     3, max: 27, step: 1, def: 15,
-    },
-    {
-      id:      'gt_torque',
-      key:     'Gas Turbine (GT) shaft torque (GTT) [kN m]',
-      label:   'GT SHAFT TORQUE',
-      unit:    'kN·m',
-      min:     250, max: 73000, step: 50, def: 27000,
-    },
-    {
-      id:      'gt_rpm',
-      key:     'GT rate of revolutions (GTn) [rpm]',
-      label:   'GT RATE OF REV',
-      unit:    'rpm',
-      min:     1300, max: 3600, step: 10, def: 2136,
-    },
-    {
-      id:      'gg_rpm',
-      key:     'Gas Generator rate of revolutions (GGn) [rpm]',
-      label:   'GAS GEN RATE OF REV',
-      unit:    'rpm',
-      min:     6500, max: 9850, step: 10, def: 8200,
-    },
-    {
-      id:      'ts',
-      key:     'Starboard Propeller Torque (Ts) [kN]',
-      label:   'STBD PROP TORQUE',
-      unit:    'kN',
-      min:     5, max: 650, step: 1, def: 227,
-    },
-    {
-      id:      'tp',
-      key:     'Port Propeller Torque (Tp) [kN]',
-      label:   'PORT PROP TORQUE',
-      unit:    'kN',
-      min:     5, max: 650, step: 1, def: 227,
-    },
-    {
-      id:      't48',
-      key:     'High Pressure (HP) Turbine exit temperature (T48) [C]',
-      label:   'HP TURBINE EXIT TEMP',
-      unit:    '°C',
-      min:     440, max: 1120, step: 1, def: 735,
-    },
-    {
-      id:      't2',
-      key:     'GT Compressor outlet air temperature (T2) [C]',
-      label:   'COMPRESSOR OUT TEMP',
-      unit:    '°C',
-      min:     540, max: 790, step: 1, def: 646,
-    },
-    {
-      id:      'p48',
-      key:     'HP Turbine exit pressure (P48) [bar]',
-      label:   'HP TURBINE EXIT PRESS',
-      unit:    'bar',
-      min:     1.0, max: 4.6, step: 0.01, def: 2.35,
-    },
-    {
-      id:      'p2',
-      key:     'GT Compressor outlet air pressure (P2) [bar]',
-      label:   'COMPRESSOR OUT PRESS',
-      unit:    'bar',
-      min:     5.8, max: 23.2, step: 0.1, def: 12.3,
-    },
-    {
-      id:      'pexh',
-      key:     'GT exhaust gas pressure (Pexh) [bar]',
-      label:   'EXHAUST GAS PRESS',
-      unit:    'bar',
-      min:     1.019, max: 1.053, step: 0.001, def: 1.03,
-    },
-    {
-      id:      'tic',
-      key:     'Turbine Injecton Control (TIC) [%]',
-      label:   'TURBINE INJECT CTRL',
-      unit:    '%',
-      min:     0, max: 93, step: 0.1, def: 33.6,
-    },
-    {
-      id:      'mf',
-      key:     'Fuel flow (mf) [kg/s]',
-      label:   'FUEL FLOW',
-      unit:    'kg/s',
-      min:     0.068, max: 1.84, step: 0.001, def: 0.66,
-    },
-    {
-      id:      'comp_decay',
-      key:     'GT Compressor decay state coefficient',
-      label:   'COMPRESSOR DECAY',
-      unit:    '',
-      min:     0.95, max: 1.0, step: 0.001, def: 0.975,
-      isDecay: true,
-    },
-    {
-      id:      'turb_decay',
-      key:     'GT Turbine decay state coefficient',
-      label:   'TURBINE DECAY',
-      unit:    '',
-      min:     0.975, max: 1.0, step: 0.001, def: 0.9875,
-      isDecay: true,
-    },
+  // ── 13 telemetry channels — must match TELEMETRY_KEYS order in app.py ─────
+  const SENSOR_CONFIG = [
+    { key: 'Ship_Speed',            id: 'slider-ship-speed',            label: 'Ship Speed',            unit: 'kn',   min: 0,    max: 30,    step: 0.1    },
+    { key: 'GT_Shaft_Torque',       id: 'slider-gt-shaft-torque',       label: 'GT Shaft Torque',       unit: 'kN·m', min: 0,    max: 80000, step: 10     },
+    { key: 'GT_Rate_of_Rev',        id: 'slider-gt-rate-of-rev',        label: 'GT Rate of Rev',        unit: 'rpm',  min: 1000, max: 4000,  step: 1      },
+    { key: 'GG_Rate_of_Rev',        id: 'slider-gg-rate-of-rev',        label: 'GG Rate of Rev',        unit: 'rpm',  min: 6000, max: 10000, step: 1      },
+    { key: 'Stbd_Prop_Torque',      id: 'slider-stbd-prop-torque',      label: 'Stbd Prop Torque',      unit: 'kN',   min: 0,    max: 700,   step: 0.1    },
+    { key: 'Port_Prop_Torque',      id: 'slider-port-prop-torque',      label: 'Port Prop Torque',      unit: 'kN',   min: 0,    max: 700,   step: 0.1    },
+    { key: 'HP_Turbine_Exit_Temp',  id: 'slider-hp-turbine-exit-temp',  label: 'HP Turbine Exit Temp',  unit: '°C',   min: 400,  max: 1200,  step: 0.1    },
+    { key: 'Compressor_Out_Temp',   id: 'slider-compressor-out-temp',   label: 'Compressor Out Temp',   unit: '°C',   min: 500,  max: 850,   step: 0.1    },
+    { key: 'HP_Turbine_Exit_Press', id: 'slider-hp-turbine-exit-press', label: 'HP Turbine Exit Press', unit: 'bar',  min: 1,    max: 5,     step: 0.001  },
+    { key: 'Compressor_Out_Press',  id: 'slider-compressor-out-press',  label: 'Compressor Out Press',  unit: 'bar',  min: 5,    max: 25,    step: 0.001  },
+    { key: 'Exhaust_Gas_Press',     id: 'slider-exhaust-gas-press',     label: 'Exhaust Gas Press',     unit: 'bar',  min: 1.0,  max: 1.1,   step: 0.0001 },
+    { key: 'Turbine_Inject_Ctrl',   id: 'slider-turbine-inject-ctrl',   label: 'Turbine Inject Ctrl',   unit: '%',    min: 0,    max: 110,   step: 0.1    },
+    { key: 'Fuel_Flow',             id: 'slider-fuel-flow',             label: 'Fuel Flow',             unit: 'kg/s', min: 0,    max: 2,     step: 0.001  },
   ];
 
-  // ── Build DOM: master slider ────────────────────────────────
-  const masterCfg = SENSORS.find(s => s.isMaster);
-  const masterWrap = document.getElementById('master-slider-wrap');
-  const masterInput = document.createElement('input');
-  masterInput.type = 'range';
-  masterInput.id = 'master-slider';
-  masterInput.min  = masterCfg.min;
-  masterInput.max  = masterCfg.max;
-  masterInput.step = masterCfg.step;
-  masterInput.value = masterCfg.def;
-  masterWrap.appendChild(masterInput);
-
-  const masterValEl = document.getElementById('master-value');
-  function updateMasterLabel(v) {
-    masterValEl.textContent = parseFloat(v).toFixed(1);
+  // ── CSS track-fill: set --pct so the gradient follows the thumb ───────────
+  function setSliderFill(el) {
+    if (!el) return;
+    const min = parseFloat(el.min) || 0;
+    const max = parseFloat(el.max) || 100;
+    const pct = Math.min(100, Math.max(0, ((parseFloat(el.value) - min) / (max - min)) * 100));
+    el.style.setProperty('--pct', pct.toFixed(2) + '%');
   }
-  updateMasterLabel(masterCfg.def);
-  updateSliderFill(masterInput);
 
-  masterInput.addEventListener('input', () => {
-    updateMasterLabel(masterInput.value);
-    updateSliderFill(masterInput);
-    debouncedPredict();
-  });
-
-  // ── Build DOM: sensor sliders ────────────────────────────────
-  const sensorList = document.getElementById('sensor-list');
-  const sliderMap = {}; // id -> input element
-
-  SENSORS.filter(s => !s.isMaster).forEach(cfg => {
-    const row = document.createElement('div');
-    row.className = 'sensor-row';
-
-    const nameEl = document.createElement('span');
-    nameEl.className = 'sensor-name';
-    nameEl.textContent = cfg.label;
-
-    const valEl = document.createElement('span');
-    valEl.className = 'sensor-val';
-    valEl.id = `val-${cfg.id}`;
-    const fmt = formatSensorVal(cfg.def, cfg);
-    valEl.innerHTML = `${fmt} <span class="sensor-unit">${cfg.unit}</span>`;
-
-    const slider = document.createElement('input');
-    slider.type  = 'range';
-    slider.id    = `slider-${cfg.id}`;
-    slider.min   = cfg.min;
-    slider.max   = cfg.max;
-    slider.step  = cfg.step;
-    slider.value = cfg.def;
-    slider.className = 'sensor-slider' + (cfg.isDecay ? ' decay-slider' : '');
-
-    sliderMap[cfg.id] = slider;
-    updateSliderFill(slider);
-
-    slider.addEventListener('input', () => {
-      const valDisplay = document.getElementById(`val-${cfg.id}`);
-      const fv = formatSensorVal(slider.value, cfg);
-      valDisplay.innerHTML = `${fv} <span class="sensor-unit">${cfg.unit}</span>`;
-      updateSliderFill(slider);
-      debouncedPredict();
-    });
-
-    row.appendChild(nameEl);
-    row.appendChild(valEl);
-    row.appendChild(slider);
-    sensorList.appendChild(row);
-  });
-
-  function formatSensorVal(v, cfg) {
+  // ── Format a sensor value to an appropriate decimal precision ────────────
+  function fmtVal(v, cfg) {
     const n = parseFloat(v);
-    if (cfg.step < 0.01) return n.toFixed(3);
-    if (cfg.step < 1)    return n.toFixed(2);
-    if (cfg.step < 10)   return n.toFixed(1);
-    return Math.round(n).toString();
+    if (isNaN(n)) return '—';
+    if (cfg.step < 0.01) return n.toFixed(4);
+    if (cfg.step < 0.1)  return n.toFixed(3);
+    if (cfg.step < 1)    return n.toFixed(1);
+    return n.toFixed(0);
   }
 
-  // ── Collect payload ──────────────────────────────────────────
-  function collectPayload() {
-    const payload = {};
-    payload[masterCfg.key] = parseFloat(masterInput.value);
-    SENSORS.filter(s => !s.isMaster).forEach(cfg => {
-      payload[cfg.key] = parseFloat(sliderMap[cfg.id].value);
-    });
-    return payload;
+  // ── Debounce ──────────────────────────────────────────────────────────────
+  function debounce(fn, ms) {
+    let timer;
+    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
   }
 
-  // ── Fetch prediction ─────────────────────────────────────────
-  async function fetchPrediction() {
-    const t0 = performance.now();
-    showSpinner(true);
 
-    try {
-      const resp = await fetch('/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(collectPayload()),
-      });
+  // ══════════════════════════════════════════════════════════════════════════
+  //  MASTER INPUTS  (pre-built in HTML)
+  // ══════════════════════════════════════════════════════════════════════════
 
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const leverSlider     = document.getElementById('lever-slider');
+  const compFaultSlider = document.getElementById('compressor-fault-slider');
+  const turbFaultSlider = document.getElementById('turbine-fault-slider');
 
-      const data = await resp.json();
-      const latency = Math.round(performance.now() - t0);
+  if (!leverSlider || !compFaultSlider || !turbFaultSlider) {
+    console.error('[script.js] Required master sliders not found — check HTML IDs: '
+      + 'lever-slider, compressor-fault-slider, turbine-fault-slider');
+    return;
+  }
 
-      renderResult(data, latency);
-    } catch (err) {
-      console.error('Prediction error:', err);
-      showError();
-    } finally {
-      showSpinner(false);
+  [leverSlider, compFaultSlider, turbFaultSlider].forEach(setSliderFill);
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  SENSOR MAP  —  look up the 13 pre-built dependent sliders by ID
+  //  Values are driven entirely by the twin model; sliders are visual outputs.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const sensorMap = {};
+
+  for (const cfg of SENSOR_CONFIG) {
+    const slider = document.getElementById(cfg.id);
+    if (!slider) { console.warn(`[script.js] Slider not found: #${cfg.id}`); continue; }
+
+    // Locate the numeric readout span inside the nearest .sensor-val container,
+    // if the HTML provides one (graceful — absent is fine).
+    const row   = slider.closest('.sensor-row');
+    const numEl = row ? row.querySelector('.sensor-val span:first-child') : null;
+
+    slider.setAttribute('tabindex', '-1');
+    slider.style.pointerEvents = 'none';
+    setSliderFill(slider);
+
+    sensorMap[cfg.key] = { slider, numEl, cfg };
+  }
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  CACHED DOM REFERENCES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const masterValueEl  = document.getElementById('master-value');
+  const compFaultValEl = document.getElementById('comp-fault-val');
+  const turbFaultValEl = document.getElementById('turb-fault-val');
+
+  const statusEl    = document.getElementById('ai-status');
+  const probValEl   = document.getElementById('ai-probability');
+  const shapImgEl   = document.getElementById('shap-image');
+  const shapSpinner = document.getElementById('shap-spinner');
+  const shapPH      = document.getElementById('shap-placeholder');
+  const probBarEl   = document.getElementById('prob-bar');
+  const sbStatusVal = document.getElementById('sb-status-val');
+  const sbLatency   = document.getElementById('sb-latency');
+  const leds        = document.querySelectorAll('.led');
+
+  // ── Live UTC clock ────────────────────────────────────────────────────────
+  (function tickClock() {
+    const el = document.getElementById('tb-clock');
+    if (el) {
+      const d  = new Date();
+      const hh = String(d.getUTCHours()).padStart(2, '0');
+      const mm = String(d.getUTCMinutes()).padStart(2, '0');
+      const ss = String(d.getUTCSeconds()).padStart(2, '0');
+      el.textContent = `${hh}:${mm}:${ss} UTC`;
     }
-  }
+    setTimeout(tickClock, 1000);
+  })();
 
-  const debouncedPredict = debounce(fetchPrediction, 280);
-
-  // ── Render result ────────────────────────────────────────────
-  function renderResult(data, latency) {
-    const isWarning = data.status !== 'NOMINAL';
-
-    // Status text
-    const statusEl = document.getElementById('status-text');
-    statusEl.textContent = data.status;
-    statusEl.className   = isWarning ? 'warning' : 'healthy';
-
-    // Probability
-    const prob = parseFloat(data.probability);
-    document.getElementById('prob-value').textContent = prob.toFixed(1);
-    const bar = document.getElementById('prob-bar');
-    bar.style.width = prob + '%';
-    bar.style.background = isWarning ? 'var(--red)' : 'var(--green)';
-
-    // LED strip
-    const leds = document.querySelectorAll('.led');
-    const litCount = Math.round((prob / 100) * leds.length);
+  // ── LED strip ─────────────────────────────────────────────────────────────
+  function updateLEDs(prob) {
+    if (!leds.length) return;
+    const lit = Math.round((prob / 100) * leds.length);
     leds.forEach((led, i) => {
-      led.className = 'led';
-      if (i < litCount) {
-        if (i < leds.length * 0.5)       led.classList.add('on-green');
-        else if (i < leds.length * 0.75) led.classList.add('on-amber');
-        else                              led.classList.add('on-red');
+      led.classList.remove('on-green', 'on-amber', 'on-red');
+      if (i < lit) {
+        led.classList.add(prob < 40 ? 'on-green' : prob < 70 ? 'on-amber' : 'on-red');
       }
     });
-
-    // SHAP image
-    const img = document.getElementById('shap-img');
-    const placeholder = document.getElementById('shap-placeholder');
-    img.src = 'data:image/png;base64,' + data.shap_image_base64;
-    img.style.display = 'block';
-    placeholder.style.display = 'none';
-
-    // Status bar
-    document.getElementById('sb-latency').textContent = latency + 'ms';
-    document.getElementById('sb-status-val').textContent = data.status;
-    document.getElementById('sb-status-val').style.color =
-      isWarning ? 'var(--red)' : 'var(--green)';
   }
 
-  function showSpinner(show) {
-    const spinner = document.getElementById('shap-spinner');
-    spinner.style.display = show ? 'flex' : 'none';
-    if (show) {
-      document.getElementById('shap-img').style.display = 'none';
+  // ── Loading / error UI ────────────────────────────────────────────────────
+  function setLoading() {
+    if (statusEl) {
+      statusEl.textContent = 'COMPUTING…';
+      statusEl.style.color = 'var(--amber, #f5a623)';
+    }
+    if (shapSpinner) shapSpinner.style.display = 'flex';
+    if (shapPH)      shapPH.style.display      = 'none';
+    if (shapImgEl)   shapImgEl.style.display   = 'none';
+  }
+
+  function setError(msg) {
+    if (statusEl) {
+      statusEl.style.color = 'var(--red, #ff4444)';
+      statusEl.textContent = 'SERVER ERROR';
+    }
+    if (shapSpinner) shapSpinner.style.display = 'none';
+    if (shapPH) {
+      shapPH.style.display = 'block';
+      const t = shapPH.querySelector('.shap-placeholder-text');
+      if (t) t.textContent = msg || 'Server error';
+    }
+    console.error('[updateDashboard]', msg);
+  }
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  //  MAIN — fetch /predict, receive twin simulation + AI diagnosis
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async function updateDashboard() {
+    const lever     = parseFloat(leverSlider.value);
+    const compFault = parseFloat(compFaultSlider.value);
+    const turbFault = parseFloat(turbFaultSlider.value);
+
+    // Update master slider track fills and readouts
+    setSliderFill(leverSlider);
+    setSliderFill(compFaultSlider);
+    setSliderFill(turbFaultSlider);
+    if (masterValueEl)  masterValueEl.textContent  = lever.toFixed(1);
+    if (compFaultValEl) compFaultValEl.textContent = parseFloat(compFaultSlider.value).toFixed(1);
+    if (turbFaultValEl) turbFaultValEl.textContent = parseFloat(turbFaultSlider.value).toFixed(1);
+    setLoading();
+
+    const t0 = performance.now();
+    let data;
+    try {
+      const res = await fetch('/predict', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // Faults are sent as raw % (0–20); app.py divides by 100 to get decimals.
+        body: JSON.stringify({
+          Lever_Position:   lever,
+          Compressor_Fault: compFault,
+          Turbine_Fault:    turbFault,
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      data = await res.json();
+    } catch (err) {
+      setError(err.message);
+      return;
+    }
+
+    if (sbLatency) sbLatency.textContent = `${Math.round(performance.now() - t0)} ms`;
+
+    // ── 1. Auto-move all 13 dependent sensor sliders ──────────────────────────
+    if (data.telemetry) {
+      for (const [key, { slider, numEl, cfg }] of Object.entries(sensorMap)) {
+        const v = data.telemetry[key];
+        if (v == null) continue;
+        slider.value = v;
+        if (numEl) numEl.textContent = fmtVal(v, cfg);
+        setSliderFill(slider);
+      }
+    }
+
+    // ── 2. AI status (text + colour) ─────────────────────────────────────────
+    const isHealthy = data.status === 'HEALTHY';
+    const prob       = data.probability ?? 0;
+
+    if (statusEl) {
+      statusEl.style.color = isHealthy ? 'var(--green, #00ff88)' : 'var(--red, #ff4444)';
+      statusEl.textContent = data.status ?? '—';
+    }
+    if (sbStatusVal) {
+      sbStatusVal.textContent = isHealthy ? 'NOMINAL' : 'ALERT';
+      sbStatusVal.style.color = isHealthy ? 'var(--green, #00ff88)' : 'var(--red, #ff4444)';
+    }
+
+    // ── 3. Failure probability ────────────────────────────────────────────────
+    if (probValEl) probValEl.textContent = `Failure Risk: ${prob}%`;
+    if (probBarEl) {
+      probBarEl.style.width      = `${Math.min(prob, 100)}%`;
+      probBarEl.style.background = isHealthy ? 'var(--green, #00ff88)' : 'var(--red, #ff4444)';
+    }
+    updateLEDs(prob);
+
+    // ── 4. SHAP waterfall image ───────────────────────────────────────────────
+    if (shapSpinner) shapSpinner.style.display = 'none';
+    if (data.shap_image && shapImgEl) {
+      shapImgEl.src           = `data:image/png;base64,${data.shap_image}`;
+      shapImgEl.style.display = 'block';
+      if (shapPH) shapPH.style.display = 'none';
     }
   }
 
-  function showError() {
-    document.getElementById('status-text').textContent = 'ERROR';
-    document.getElementById('status-text').className = 'warning';
-  }
 
-  // ── Initial prediction on load ───────────────────────────────
-  window.addEventListener('load', () => {
-    setTimeout(fetchPrediction, 400);
-  });
+  // ══════════════════════════════════════════════════════════════════════════
+  //  EVENT WIRING  —  all three master sliders trigger the pipeline
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const debouncedUpdate = debounce(updateDashboard, 280);
+
+  leverSlider.addEventListener('input',     debouncedUpdate);
+  leverSlider.addEventListener('change',    debouncedUpdate);
+  compFaultSlider.addEventListener('input',  debouncedUpdate);
+  compFaultSlider.addEventListener('change', debouncedUpdate);
+  turbFaultSlider.addEventListener('input',  debouncedUpdate);
+  turbFaultSlider.addEventListener('change', debouncedUpdate);
+
+  // Populate dashboard on first load
+  updateDashboard();
 
 })();

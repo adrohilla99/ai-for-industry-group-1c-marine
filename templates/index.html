@@ -35,7 +35,27 @@
           <span class="master-label">⬡ PRIMARY DRIVE LEVER</span>
           <span class="master-value" id="master-value">5.2</span>
         </div>
-        <!-- slider injected by JS -->
+        <input type="range" id="lever-slider" min="1.1" max="9.3" step="0.1" value="5.2">
+      </div>
+    </div>
+
+    <!-- Fault Injection Block -->
+    <div class="panel" id="fault-block">
+      <div class="panel-header">
+        <span class="panel-tag">FLT-01</span>
+        <span class="panel-title">FAULT INJECTION · DEGRADATION SIMULATION</span>
+      </div>
+      <div class="panel-body">
+        <div class="sensor-row">
+          <div class="sensor-name">COMPRESSOR FAULT</div>
+          <div class="sensor-val"><span id="comp-fault-val">0.0</span><span class="sensor-unit">%</span></div>
+          <input type="range" id="compressor-fault-slider" class="sensor-slider" min="0" max="20" step="0.1" value="0">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">TURBINE FAULT</div>
+          <div class="sensor-val"><span id="turb-fault-val">0.0</span><span class="sensor-unit">%</span></div>
+          <input type="range" id="turbine-fault-slider" class="sensor-slider" min="0" max="20" step="0.1" value="0">
+        </div>
       </div>
     </div>
 
@@ -46,7 +66,71 @@
         <span class="panel-title">LIVE SENSOR TELEMETRY</span>
       </div>
       <div class="panel-body" id="sensor-list">
-        <!-- sensor rows injected by JS -->
+        <div class="sensor-row">
+          <div class="sensor-name">SHIP SPEED</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">kn</span></div>
+          <input type="range" id="slider-ship-speed" class="sensor-slider" min="0" max="30" step="0.1" value="15">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">GT SHAFT TORQUE</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">kN·m</span></div>
+          <input type="range" id="slider-gt-shaft-torque" class="sensor-slider" min="0" max="80000" step="10" value="40000">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">GT RATE OF REV</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">rpm</span></div>
+          <input type="range" id="slider-gt-rate-of-rev" class="sensor-slider" min="1000" max="4000" step="1" value="2500">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">GG RATE OF REV</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">rpm</span></div>
+          <input type="range" id="slider-gg-rate-of-rev" class="sensor-slider" min="6000" max="10000" step="1" value="8000">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">STBD PROP TORQUE</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">kN</span></div>
+          <input type="range" id="slider-stbd-prop-torque" class="sensor-slider" min="0" max="700" step="0.1" value="350">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">PORT PROP TORQUE</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">kN</span></div>
+          <input type="range" id="slider-port-prop-torque" class="sensor-slider" min="0" max="700" step="0.1" value="350">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">HP TURBINE EXIT TEMP</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">°C</span></div>
+          <input type="range" id="slider-hp-turbine-exit-temp" class="sensor-slider" min="400" max="1200" step="0.1" value="800">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">COMPRESSOR OUT TEMP</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">°C</span></div>
+          <input type="range" id="slider-compressor-out-temp" class="sensor-slider" min="500" max="850" step="0.1" value="675">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">HP TURBINE EXIT PRESS</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">bar</span></div>
+          <input type="range" id="slider-hp-turbine-exit-press" class="sensor-slider" min="1" max="5" step="0.001" value="3">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">COMPRESSOR OUT PRESS</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">bar</span></div>
+          <input type="range" id="slider-compressor-out-press" class="sensor-slider" min="5" max="25" step="0.001" value="15">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">EXHAUST GAS PRESS</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">bar</span></div>
+          <input type="range" id="slider-exhaust-gas-press" class="sensor-slider" min="1.0" max="1.1" step="0.0001" value="1.05">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">TURBINE INJECT CTRL</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">%</span></div>
+          <input type="range" id="slider-turbine-inject-ctrl" class="sensor-slider" min="0" max="110" step="0.1" value="55">
+        </div>
+        <div class="sensor-row">
+          <div class="sensor-name">FUEL FLOW</div>
+          <div class="sensor-val"><span>—</span><span class="sensor-unit">kg/s</span></div>
+          <input type="range" id="slider-fuel-flow" class="sensor-slider" min="0" max="2" step="0.001" value="1">
+        </div>
       </div>
     </div>
 
@@ -67,7 +151,7 @@
         <!-- Cell 1: System Status -->
         <div class="status-cell">
           <div class="status-cell-label">▶ SYSTEM STATUS</div>
-          <div id="status-text" class="healthy">INITIALISING</div>
+          <div id="ai-status" class="healthy">INITIALISING</div>
           <div style="margin-top:8px;">
             <div class="led-strip">
               <!-- 16 LEDs representing failure probability -->
@@ -87,8 +171,7 @@
         <div class="status-cell">
           <div class="status-cell-label">▶ FAILURE PROBABILITY</div>
           <div>
-            <span id="prob-value" class="metric-num">–</span>
-            <span class="prob-suffix"> %</span>
+            <span id="ai-probability" class="metric-num">–</span>
           </div>
           <div id="prob-bar-wrap" style="margin-top:10px;">
             <div id="prob-bar"></div>
@@ -130,7 +213,7 @@
         </div>
 
         <!-- SHAP image -->
-        <img id="shap-img" alt="SHAP Waterfall Plot" />
+        <img id="shap-image" alt="SHAP Waterfall Plot" />
       </div>
     </div><!-- /shap-panel -->
 

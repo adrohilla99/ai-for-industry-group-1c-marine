@@ -61,3 +61,6 @@ faidm/
 # Environment variables
 .env
 .env.local
+
+# Model files
+*.pkl

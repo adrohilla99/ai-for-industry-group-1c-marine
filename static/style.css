@@ -194,6 +194,11 @@ body::before {
   flex-shrink: 0;
 }
 
+#fault-block {
+  border-bottom: 2px solid var(--border);
+  flex-shrink: 0;
+}
+
 .master-slider-wrap {
   padding: 12px 14px;
   background: #202020;
@@ -223,7 +228,7 @@ body::before {
   text-align: right;
 }
 
-input[type=range]#master-slider {
+input[type=range]#lever-slider {
   -webkit-appearance: none;
   width: 100%;
   height: 12px;
@@ -234,7 +239,7 @@ input[type=range]#master-slider {
   cursor: pointer;
 }
 
-input[type=range]#master-slider::-webkit-slider-thumb {
+input[type=range]#lever-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 20px; height: 20px;
   background: var(--cyan);
@@ -358,7 +363,7 @@ input[type=range].decay-slider::-webkit-slider-thumb {
 }
 
 /* Big status indicator */
-#status-text {
+#ai-status {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 2px;
@@ -366,12 +371,12 @@ input[type=range].decay-slider::-webkit-slider-thumb {
   transition: color 0.3s, text-shadow 0.3s;
 }
 
-#status-text.healthy {
+#ai-status.healthy {
   color: var(--green);
   text-shadow: 0 0 12px var(--green-glow);
 }
 
-#status-text.warning {
+#ai-status.warning {
   color: var(--red);
   text-shadow: 0 0 12px var(--red-glow);
   animation: alarm-pulse 0.8s ease-in-out infinite;
@@ -398,7 +403,7 @@ input[type=range].decay-slider::-webkit-slider-thumb {
   transition: width 0.4s ease, background 0.4s ease;
 }
 
-#prob-value {
+#ai-probability {
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
@@ -459,7 +464,7 @@ input[type=range].decay-slider::-webkit-slider-thumb {
   overflow: hidden;
 }
 
-#shap-img {
+#shap-image {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
