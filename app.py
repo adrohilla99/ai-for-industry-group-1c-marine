@@ -105,17 +105,34 @@ def _inject_faults(telemetry: dict, compressor_fault: float, turbine_fault: floa
     return faulted
 
 
+_DECAY_RANGE = _HEALTHY_DECAY - _CRITICAL_DECAY  # 0.008 — width of the danger band
+
+
 def _diagnose(lever: float, telemetry: dict) -> tuple[str, float]:
-    """Step C — failure probability via decay-curve mapping."""
+    """Step C — failure probability relative to the healthy baseline at this lever position.
+
+    Fixed global thresholds break at high lever values because the model outputs
+    naturally lower decay coefficients under high load.  Instead we ask the model
+    what a *fault-free* engine looks like right now, then measure how far below
+    that baseline the faulted telemetry sits.
+    """
+    # Healthy reference: what decay does the model expect with no faults at this lever?
+    healthy_tel   = _simulate_telemetry(lever)
+    healthy_row   = np.array([[lever] + [healthy_tel[k] for k in TELEMETRY_KEYS]])
+    healthy_decay = float(np.mean(np.atleast_1d(CLASSIFIER_MODEL.predict(healthy_row)[0])))
+
+    # Actual (possibly faulted) decay
     row        = np.array([[lever] + [telemetry[k] for k in TELEMETRY_KEYS]])
     mean_decay = float(np.mean(np.atleast_1d(CLASSIFIER_MODEL.predict(row)[0])))
 
-    if mean_decay >= _HEALTHY_DECAY:
+    critical_decay = healthy_decay - _DECAY_RANGE
+
+    if mean_decay >= healthy_decay:
         prob = 0.0
-    elif mean_decay <= _CRITICAL_DECAY:
+    elif mean_decay <= critical_decay:
         prob = 1.0
     else:
-        linear_prob = (_HEALTHY_DECAY - mean_decay) / (_HEALTHY_DECAY - _CRITICAL_DECAY)
+        linear_prob = (healthy_decay - mean_decay) / _DECAY_RANGE
         prob = linear_prob ** 0.5
 
     status = 'MAINTENANCE REQUIRED' if prob >= 0.6 else 'HEALTHY'
