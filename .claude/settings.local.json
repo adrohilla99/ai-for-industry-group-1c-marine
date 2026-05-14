@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(AIIScriptspython.exe -c ' *)",
-      "Bash(python -c ' *)"
-    ]
-  }
-}
