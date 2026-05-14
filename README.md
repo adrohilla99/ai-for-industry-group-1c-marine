@@ -77,7 +77,7 @@ Key packages:
 To run the analysis:
 
 1. Install required dependencies: `pip install -r requirements.txt`
-2. Open and execute: `predictive_maintenance_analysis.ipynb`
+2. Open and execute: `naval-vessel-predictive-maintenance.ipynb`
 
 ## Notes
 
