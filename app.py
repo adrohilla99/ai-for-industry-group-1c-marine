@@ -157,9 +157,9 @@ def _shap_waterfall_b64(lever: float, telemetry: dict) -> str:
     sv.values      = sv.values      * 100
     sv.base_values = sv.base_values * 100
 
-    fig = plt.figure(figsize=(9, 5))
+    fig = plt.figure(figsize=(7, 4))
     fig.patch.set_facecolor('#1a1a1a')
-    shap.plots.waterfall(sv, show=False, max_display=14)
+    shap.plots.waterfall(sv, show=False, max_display=10)
 
     for ax in fig.get_axes():
         ax.set_facecolor('#1a1a1a')
@@ -173,7 +173,7 @@ def _shap_waterfall_b64(lever: float, telemetry: dict) -> str:
     plt.tight_layout(pad=0.8)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=110, bbox_inches='tight',
+    plt.savefig(buf, format='png', dpi=90, bbox_inches='tight',
                 facecolor='#1a1a1a', edgecolor='none')
     buf.seek(0)
     img_b64 = base64.b64encode(buf.read()).decode('utf-8')

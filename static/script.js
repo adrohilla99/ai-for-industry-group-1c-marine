@@ -55,15 +55,13 @@
 
   const leverSlider     = document.getElementById('lever-slider');
   const compFaultSlider = document.getElementById('compressor-fault-slider');
-  const turbFaultSlider = document.getElementById('turbine-fault-slider');
-
-  if (!leverSlider || !compFaultSlider || !turbFaultSlider) {
+  if (!leverSlider || !compFaultSlider) {
     console.error('[script.js] Required master sliders not found — check HTML IDs: '
-      + 'lever-slider, compressor-fault-slider, turbine-fault-slider');
+      + 'lever-slider, compressor-fault-slider');
     return;
   }
 
-  [leverSlider, compFaultSlider, turbFaultSlider].forEach(setSliderFill);
+  [leverSlider, compFaultSlider].forEach(setSliderFill);
 
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -96,7 +94,6 @@
 
   const masterValueEl  = document.getElementById('master-value');
   const compFaultValEl = document.getElementById('comp-fault-val');
-  const turbFaultValEl = document.getElementById('turb-fault-val');
 
   const statusEl    = document.getElementById('ai-status');
   const probValEl   = document.getElementById('ai-probability');
@@ -166,15 +163,12 @@
   async function updateDashboard() {
     const lever     = parseFloat(leverSlider.value);
     const compFault = parseFloat(compFaultSlider.value);
-    const turbFault = parseFloat(turbFaultSlider.value);
 
     // Update master slider track fills and readouts
     setSliderFill(leverSlider);
     setSliderFill(compFaultSlider);
-    setSliderFill(turbFaultSlider);
     if (masterValueEl)  masterValueEl.textContent  = lever.toFixed(1);
     if (compFaultValEl) compFaultValEl.textContent = parseFloat(compFaultSlider.value).toFixed(1);
-    if (turbFaultValEl) turbFaultValEl.textContent = parseFloat(turbFaultSlider.value).toFixed(1);
     setLoading();
 
     const t0 = performance.now();
@@ -187,7 +181,7 @@
         body: JSON.stringify({
           Lever_Position:   lever,
           Compressor_Fault: compFault,
-          Turbine_Fault:    turbFault,
+          Turbine_Fault:    0,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -251,8 +245,6 @@
   leverSlider.addEventListener('change',    debouncedUpdate);
   compFaultSlider.addEventListener('input',  debouncedUpdate);
   compFaultSlider.addEventListener('change', debouncedUpdate);
-  turbFaultSlider.addEventListener('input',  debouncedUpdate);
-  turbFaultSlider.addEventListener('change', debouncedUpdate);
 
   // Populate dashboard on first load
   updateDashboard();
