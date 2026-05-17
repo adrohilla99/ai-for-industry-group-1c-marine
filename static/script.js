@@ -102,7 +102,8 @@
   const shapPH      = document.getElementById('shap-placeholder');
   const probBarEl   = document.getElementById('prob-bar');
   const sbStatusVal = document.getElementById('sb-status-val');
-  const sbLatency   = document.getElementById('sb-latency');
+  const sbLatency     = document.getElementById('sb-latency');
+  const panelLatency  = document.getElementById('panel-latency');
   const leds        = document.querySelectorAll('.led');
 
   // ── Live UTC clock ────────────────────────────────────────────────────────
@@ -191,7 +192,9 @@
       return;
     }
 
-    if (sbLatency) sbLatency.textContent = `${Math.round(performance.now() - t0)} ms`;
+    const ms = Math.round(performance.now() - t0);
+    if (sbLatency)    sbLatency.textContent    = `${ms} ms`;
+    if (panelLatency) panelLatency.textContent = ms;
 
     // ── 1. Auto-move all 13 dependent sensor sliders ──────────────────────────
     if (data.telemetry) {
